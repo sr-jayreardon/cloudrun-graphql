@@ -1,0 +1,86 @@
+{
+  "name": "cloudrun-graphql",
+  "version": "0.0.1",
+  "private": true,
+  "main": "gcp-entrypoint.js",
+  "config": {
+    "env_name": "",
+    "provider_projectId": "",
+    "provider_region": "",
+    "provider_app": "",
+    "provider_service": "",
+    "provider_computeAccount": "",
+    "provider_sa": "",
+    "domain": "",
+    "version": "$npm_package_version"
+  },
+  "scripts": {
+    "localStart": "envName=dev node src/gcp-entrypoint.js",
+    "clean": "rm -rf dist",
+    "tfinit": "terraform init && terraform get && terraform workspace select $npm_package_config_env_name ",
+    "tfrefresh": "TF_VAR_env_name=$npm_package_config_env_name TF_VAR_domain=$npm_package_config_domain TF_VAR_provider_projectId=$npm_package_config_provider_projectId TF_VAR_provider_region=$npm_package_config_provider_region terraform refresh",
+    "tfimport": "./infraScripts/tfImportAll.sh $npm_package_config_env_name $npm_package_config_domain $npm_package_config_provider_projectId $npm_package_config_provider_region",
+    "tfauth": "gcloud auth activate-service-account --key-file ~/.config/gcloud/dev-gs-platform-credentials.json",
+    "fetchCredentials": "gsutil cp gs://dev-gs-env-variables/dev-gs-platform-credentials.json ~/.config/gcloud/dev-gs-platform-credentials.json",
+    "test": "yarn run lint && JUNIT_REPORT_PATH=./target/jenkins-test-results.xml nyc --reporter=json --report-dir=target/coverage mocha --opts test/mocha.opts \"test/unit/**/*.spec.js\" --colors --reporter mocha-jenkins-reporter && nyc report --reporter=cobertura --report-dir=target",
+    "test:fast": "nyc mocha --opts test/mocha.opts \"test/unit/**/*.spec.js\" --colors --reporter mocha-jenkins-reporter",
+    "integration": "scripts/integration.sh",
+    "prepackage": "yarn run test && cp -r src/ dist && cp -r node_modules dist/. && cp package.json ./dist && cp ~/.npmrc ./dist && cp .gcloudignore ./dist ",
+    "package": "TF_VAR_env_name=$npm_package_config_env_name TF_VAR_domain=$npm_package_config_domain TF_VAR_provider_projectId=$npm_package_config_provider_projectId TF_VAR_provider_region=$npm_package_config_provider_region terraform plan -out plan_to_execute",
+    "endpointsDeploy": "./infraScripts/endpointsDeploy.sh $npm_package_config_provider_projectId $npm_package_config_provider_region $npm_package_config_provider_app $npm_package_config_provider_service",
+    "updateFunctionPermissions": "./infraScripts/updateFunctionPermissions.sh $npm_package_config_provider_projectId $npm_package_config_provider_computeAccount",
+    "predeploy": "yarn run clean && yarn run package",
+    "deploy": "TF_VAR_env_name=$npm_package_config_env_name TF_VAR_domain=$npm_package_config_domain TF_VAR_provider_projectId=$npm_package_config_provider_projectId TF_VAR_provider_region=$npm_package_config_provider_region terraform apply \"plan_to_execute\" && yarn run endpointsDeploy && yarn run updateFunctionPermissions",
+    "cloudRunDeploy": "./infraScripts/createCloudRun.sh $npm_package_config_provider_projectId $npm_package_config_provider_region $npm_package_config_provider_service",
+    "postdeploy": "rm -rf plan_to_execute",
+    "lint": "eslint \"src/**/*.js\" \"test/unit/**/*.spec.js\" && ((hash tflint 2>/dev/null && tflint *.tf) || echo >&2 \"Install tflint to lint terraform. (brew tap wata727/tflint;  brew install tflint)\" )",
+    "lint:fix": "eslint --fix \"src/**/*.js\" \"test/unit/**/*.spec.js\" && ((hash tflint 2>/dev/null && tflint *.tf) || echo >&2 \"Install tflint to lint terraform. (brew tap wata727/tflint;  brew install tflint)\" )",
+    "configOverrides": "YARN_SILENT=0 yarn run overrideProviderApp && yarn run overrideProviderComputeAccount && yarn run overrideOpenApi && echo 'values after override are' && echo $npm_package_config_provider_app $npm_package_config_provider_computeAccount && cat ./src/openapi-functions.yaml",
+    "overrideProviderApp": "./infraScripts/overrideProviderApp.sh $npm_package_config_provider_projectId $npm_package_config_provider_service $npm_package_config_provider_region $npm_package_config_provider_app",
+    "overrideProviderComputeAccount": "./infraScripts/overrideServiceAccount.sh $npm_package_config_provider_projectId $npm_package_config_provider_computeAccount",
+    "overrideOpenApi": "./infraScripts/overrideOpenapi.sh $npm_package_config_env_name $npm_package_config_provider_app"
+  },
+  "keywords": [
+    "gcp",
+    "cloud function"
+  ],
+  "dependencies": {
+    "@sunrun/structured-logging": "^1.7.0",
+    "axios": "^0.19.2",
+    "express-graphql": "^0.9.0",
+    "graphql": "^14.6.0",
+    "merge-graphql-schemas": "^1.7.6"
+  },
+  "devDependencies": {
+    "chai": "^4.2.0",
+    "eslint": "^6.5.0",
+    "eslint-plugin-import": "^2.14.0",
+    "eslint-plugin-react-hooks": "^2.4.0",
+    "mocha": "^7.0.1",
+    "mocha-jenkins-reporter": "^0.4.1",
+    "nyc": "^15.0.0"
+  },
+  "peerDependencies": {
+    "eslint-plugin-react-hooks": "^2.0.1"
+  },
+  "cloud-repo-tools": {
+    "test": {
+      "app": {
+        "msg": "Hello, world!"
+      }
+    },
+    "requiresKeyFile": true,
+    "requiresProjectId": true
+  },
+  "description": "Example of running graphql inside a cloudfunction",
+  "author": "",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sr-jayreardon/cloudrun-graphql.git"
+  },
+  "bugs": {
+    "url": "https://github.com/sr-jayreardon/cloudrun-graphql/issues"
+  },
+  "homepage": "https://github.com/sr-jayreardon/cloudrun-graphql#readme"
+}
